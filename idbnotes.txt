@@ -1,0 +1,28 @@
+columns:
+	0: file type, "f" "d" "s" "l" etc
+	1: install mode, "0444"
+	2: owner user name
+	3: owner group name
+	4: install path
+	5: source path?
+	6+ various fields:
+		cmpsize(...)	<-- 0 if uncompressed
+		config(noupdate)
+		config(suggest)
+		config(update)
+		exitop('...')
+		f(...)		<-- 32-bit value in unsigned decimal
+		mach(GFXBOARD=CLOVER2 SUBGR=IP5GT)
+		needrqs
+		nohist
+		noshare
+		nostrip
+		off(...)
+		postop(...)
+		preop(...)
+		removeop(...)
+		size(...)	<-- decimal
+		stripdso
+		sum(...)	<-- 16-bit value in unsigned decimal
+		symval(...)	<-- symbolic link target
+	x: subsystem name, "ultra.dev.diag"; can be at any point in the various fields
