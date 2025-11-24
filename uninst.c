@@ -45,19 +45,34 @@ int open_mkdir(const char *file, int flags, int mode)
 	int rc;
 	char *myclone, *tmp;
 	assert(flags & O_CREAT);
-	myclone = strdupa(file);
+	myclone = strdup(file);
 	if (!myclone) err(1, "in strdupa");
 
 	/* Walk the path, creating directories as we go. */
 	for (tmp = myclone; *tmp; tmp++) {
 		if (*tmp == '/') {
 			*tmp = '\0';
+			/* WEIRD API ALERT:
+			 * POSIX and Win32 have different definitions of mkdir().
+			 * Fortunately, the only real difference is in whether they
+			 * take a second argument. Windows doesn't, but POSIX takes
+			 * an argument specifying the new directory's mode.
+			 * On error, either implementation will return -1
+			 * and set errno appropriately.
+			 */
+#ifdef __MINGW32__
+			rc = mkdir(myclone);
+#else
 			rc = mkdir(myclone, 0755);
-			if ((rc == -1) && (errno != EEXIST))
+#endif
+			if ((rc == -1) && (errno != EEXIST)) {
+				free(myclone);
 				return rc;
+			}
 			*tmp = '/';
 		}
 	}
+	free(myclone);
 	return open(file, flags, mode);
 }
 
@@ -162,7 +177,7 @@ int main(int argc, char *argv[])
 	char *idbdata;
 	idbdata = calloc(1, sb.st_size + 2);	/* Why +2? We need two nulls at the end. */
 	if (rc == -1) err(1, "in asprintf");
-	FILE *idbf = fopen(idbfilename, "r");
+	FILE *idbf = fopen(idbfilename, "rb");
 	if (!idbf) err(1, "couldn't open idb file '%s'", idbfilename);
 	sz = fread(idbdata, sb.st_size, 1, idbf);
 	if (sz != 1) err(1, "while reading from idb file (%zu)", sz);
@@ -227,11 +242,15 @@ int main(int argc, char *argv[])
 		 * If there is no open image file, then we open the one we want.
 		 */
 		if (!openfilename) {
+			int flags = O_RDONLY;
+#ifdef __MINGW32__
+			flags |= O_BINARY;
+#endif
 			openfilename = strdup(imagefilename);
 			rc = stat(openfilename, &sb);
 			if (rc) err(1, "couldn't stat image file '%s'", openfilename);
 
-			fd = open(openfilename, O_RDONLY);
+			fd = open(openfilename, flags);
 			if (fd == -1) err(1, "while opening image file '%s'", openfilename);
 		}
 
@@ -241,7 +260,11 @@ int main(int argc, char *argv[])
 		if (!line->off_present || !line->size_present)
 			goto next_file;
 
-		outfd = open_mkdir(line->installPath, O_WRONLY | O_CREAT, 0644);
+		int flags = O_WRONLY | O_CREAT;
+#ifdef __MINGW32__
+		flags |= O_BINARY;
+#endif
+		outfd = open_mkdir(line->installPath, flags, 0644);
 		if (outfd == -1) err(1, "couldn't open outfile '%s'", line->installPath);
 
 		off_t pos;

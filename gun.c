@@ -70,7 +70,7 @@
 #include <errno.h>          /* errno */
 #include <fcntl.h>          /* open() */
 #include <unistd.h>         /* read(), write(), close(), chown(), unlink() */
-#include <err.h>
+#include "err.h"
 #include "gun.h"
 
 /* buffer constants */

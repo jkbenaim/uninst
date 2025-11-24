@@ -1,11 +1,11 @@
 %option noyywrap
 %{
-#include <err.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "err.h"
 #include "idblex.h"
 
 struct idbline_s line = {0,};

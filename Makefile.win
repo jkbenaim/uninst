@@ -1,0 +1,32 @@
+HOST = i686-w64-mingw32
+CC = ${HOST}-gcc
+CXX = ${HOST}-g++
+LD = ${HOST}-ld
+WINDRES = ${HOST}-windres
+
+target  ?= uninst
+objects := $(patsubst %.c,%.o,$(wildcard *.c)) resource.o idblex.o
+
+#EXTRAS += -fsanitize=bounds -fsanitize=undefined -fsanitize=null -fcf-protection=full -fstack-protector-all -fstack-check -Wimplicit-fallthrough -fanalyzer -Wall
+
+LDLIBS += -lws2_32 -lwinmm
+LDFLAGS += -static ${EXTRAS}
+CFLAGS  += -flto -std=gnu2x -Og -ggdb ${EXTRAS}
+
+.PHONY: all
+all:	$(target) README
+	strip $(target).exe
+	upx $(target).exe
+
+.PHONY: clean
+clean:
+	rm -f $(target) $(target).exe $(objects)
+
+README: ${target}.1
+	MANWIDTH=77 man --nh --nj ./${target}.1 | col -b > $@
+
+resource.o: resource.rc
+	$(WINDRES) $< -o $@
+
+$(target): $(objects)
+

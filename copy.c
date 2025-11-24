@@ -33,12 +33,12 @@ void copy(int infd, int outfd, unsigned inlen)
 {
 	ssize_t sRc;
 	unsigned char buf[BUFSIZ];
-	size_t min(size_t a, size_t b) { return a>b?b:a; }
 
 	while (inlen > 0) {
 		ssize_t step;
 
-		sRc = read(infd, buf, min(inlen, BUFSIZ));
+		step = inlen>BUFSIZ?BUFSIZ:inlen;
+		sRc = read(infd, buf, step);
 		if (sRc < 0) err(1, "couldn't read from image");
 
 		if (sRc == 0) continue;
