@@ -17,7 +17,6 @@
 #include "err.h"
 #include "gun.h"
 #include "idblex.h"
-#include "mapfile.h"
 #include "progname.h"
 #include "stdnoreturn.h"
 #include "tryhelp.h"
