@@ -1,0 +1,42 @@
+uninst(1)		   General Commands Manual		   uninst(1)
+
+NAME
+       uninst - extract files from IRIX's inst packages
+
+SYNOPSIS
+       uninst [OPTION] FILE
+
+DESCRIPTION
+       uninst extracts files from an IRIX 'inst'-style package.
+
+       inst packages consist of a number of files: the product description
+       file with no extension, the idb file with the .idb extension, and at
+       least one image file with various extensions. Any of these may be
+       given to uninst, as long as all of them are present and named
+       correctly.
+
+OPTIONS
+       -h     Print a usage message on standard output and exit.
+
+       -l     List files without extracting.
+
+       -v     List files while extracting.
+
+       -V     Print version information on standard output and exit
+	      successfully.
+
+AUTHOR
+       Jason Benaim <jrra@jrra.zone>
+
+COPYRIGHT
+       Copyright © 2025 Jason Benaim, except for gun.c which is copyright ©
+       2003, 2005, 2008, 2010, 2012 Mark Adler.
+       Licensed under the GNU GPL version 2 or later, except for gun.c which
+       is under the zlib license.
+       This is free software; you are free to change and redistribute it.
+       There is NO WARRANTY, to the extent permitted by law.
+
+SEE ALSO
+       tar(1), unzip(1)
+
+								   uninst(1)
