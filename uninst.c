@@ -49,7 +49,6 @@ int open_mkdir(const char *file, int flags, int mode)
 	if (!myclone) err(1, "in strdupa");
 
 	/* Walk the path, creating directories as we go. */
-	char was;
 	for (tmp = myclone; *tmp; tmp++) {
 		if (*tmp == '/') {
 			*tmp = '\0';

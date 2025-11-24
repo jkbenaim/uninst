@@ -8,7 +8,6 @@
 
 void seek_past_name(int infd)
 {
-	int rc;
 	ssize_t sRc;
 	uint16_t len;
 	unsigned char buf[BUFSIZ];
@@ -32,7 +31,6 @@ void seek_past_name(int infd)
 
 void copy(int infd, int outfd, unsigned inlen)
 {
-	int rc;
 	ssize_t sRc;
 	unsigned char buf[BUFSIZ];
 	size_t min(size_t a, size_t b) { return a>b?b:a; }
