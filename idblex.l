@@ -1,26 +1,26 @@
 %option noyywrap
 %{
 #include <err.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
 #include <stdbool.h>
-#include "db.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "idblex.h"
 
 struct idbline_s line = {0,};
-int64_t f_id;
+idblex_cb_func_t cb_func = NULL;
+void *cb_data = NULL;
 
 unsigned colNum = 0;
 unsigned lineNum = 1;
 
 bool dump_line = false;
 
-void printLine(struct idbline_s *line);
-void freeLine(struct idbline_s *line);
-char *getBody(const char *s);
-unsigned long getNum(const char *s);
+static void printLine(struct idbline_s *line);
+static void freeLine(struct idbline_s *line);
+static char *getBody(const char *s);
+static unsigned long getNum(const char *s);
 
 %}
 
@@ -30,17 +30,28 @@ unsigned long getNum(const char *s);
 %%
 
 \n {
+	int rc;
 	if (dump_line) {
 		printLine(&line);
 		dump_line = false;
 	}
-	DB_AddIdbFile(f_id, &line);
+
+	rc = cb_func(&line, cb_data);
+	switch (rc) {
+	case IDBLEX_CONTINUE:
+		break;
+	case IDBLEX_STOP:
+	default:
+		{
+		yyterminate();
+		}
+		break;
+	}
+
 	freeLine(&line);
 	colNum = 0;
 	lineNum++;
-	//printf("\n");
 	BEGIN(INITIAL);
-	//exit(0);
 }
 
 [\t ]+ {
@@ -61,7 +72,7 @@ unsigned long getNum(const char *s);
 }
 
 <various>dev\(.*\) {
-	// TODO: get major and minor?
+	/* TODO: get major and minor? */
 }
 
 <various>exitop\(\'(\\.|[^'\\])*\'\) {
@@ -173,21 +184,19 @@ unsigned long getNum(const char *s);
 }
 
 <various>[^\t\n ]+ {
-	// catch-all, but also grab subsystem
+	/* catch-all, but also grab subsystem */
 	if (!line.subsystem) {
 		line.subsystem = strdup(yytext);
 	} else {
 		printf("token: '%s'\n", yytext);
-		warnx("unknown token on file_id %ld line %u", f_id, lineNum);
+		warnx("unknown token on line %u", lineNum);
 		dump_line = true;
 	}
 }
 
 [^\t\n ]+ {
-	//printf("%2u: %s\n", colNum, yytext);
 	switch (colNum) {
 	case 0:
-		//printf("line %u\n", lineNum);
 		line.line_num = lineNum;
 		line.type = yytext[0];
 		break;
@@ -218,7 +227,7 @@ unsigned long getNum(const char *s);
 	}
 }
 %%
-void printLine(struct idbline_s *line)
+static void printLine(struct idbline_s *line)
 {
 	printf("type: %c\n", line->type);
 	printf("mode: %o\n", line->mode);
@@ -231,11 +240,11 @@ void printLine(struct idbline_s *line)
 	printf("size: %u\n", line->size);
 	printf("cmpsize: %u\n", line->cmpsize);
 	printf("preop: '%s'\n", line->preop);
-	// TODO
+	/* TODO */
 	printf("\n");
 }
 
-void freeLine(struct idbline_s *line)
+static void freeLine(struct idbline_s *line)
 {
 	free(line->userName);
 	free(line->groupName);
@@ -255,7 +264,7 @@ void freeLine(struct idbline_s *line)
 	memset(line, 0, sizeof(*line));
 }
 
-char *getBody(const char *s)
+static char *getBody(const char *s)
 {
 	__label__ out_error, out_ok;
 	char *retval = NULL;
@@ -287,7 +296,7 @@ out_ok:
 	return retval;
 }
 
-unsigned long getNum(const char *s)
+static unsigned long getNum(const char *s)
 {
 	__label__ out_error, out_ok;
 	unsigned long retval = 0;
@@ -302,21 +311,22 @@ unsigned long getNum(const char *s)
 	goto out_ok;
 	
 out_error:
-	printf("getNum failed at char %02xh\n", *tmp);
+	printf("idblex getNum failed");
 	retval = -1;
 out_ok:
 	free(ptr);
 	return retval;
 }
 
-void idblex(int64_t file_id, char *buf, size_t len)
+void idblex(char *buf, size_t len, idblex_cb_func_t func, void *data)
 {
 	YY_BUFFER_STATE state;
 
 	memset(&line, 0, sizeof(line));
-	f_id = file_id;
 	colNum = 0;
 	lineNum = 1;
+	cb_func = func;
+	cb_data = data;
 
 	state = yy_scan_buffer(buf, len);
 	yylex();
