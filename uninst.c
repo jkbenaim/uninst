@@ -174,7 +174,9 @@ int main(int argc, char *argv[])
 
 	int callback(struct idbline_s *line, void *data)
 	{
+		__label__ next_file;
 		int rc;
+		int outfd = -1;
 		struct stat sb;
 		char *imagename = NULL;
 		char *pdfilename = (char *)data;
@@ -211,7 +213,6 @@ int main(int argc, char *argv[])
 		rc = asprintf(&imagefilename, "%s.%s", pdfilename, imagename);
 		if (rc == -1) err(1, "in asprintf");
 
-		/* Open the image file. */
 		/* If an image file is already open, and it's not the one we
 		 * want, then close that image file.
 		 */
@@ -238,9 +239,8 @@ int main(int argc, char *argv[])
 		assert(fd != -1);
 
 		if (!line->off_present || !line->size_present)
-			return IDBLEX_CONTINUE;
+			goto next_file;
 
-		int outfd;
 		outfd = open_mkdir(line->installPath, O_WRONLY | O_CREAT, 0644);
 		if (outfd == -1) err(1, "couldn't open outfile '%s'", line->installPath);
 
@@ -251,17 +251,16 @@ int main(int argc, char *argv[])
 		seek_past_name(fd);
 		if (line->cmpsize_present && (line->cmpsize > 0)) {
 			/* Data is compressed. */
-#if 1
 			rc = gunpipe(fd, outfd, line->cmpsize);
-#else
-			decompress(fd, outfd, line->cmpsize);
-#endif
 		} else {
 			/* Data is raw. */
 			copy(fd, outfd, line->size);
 		}
-
-		close(outfd);
+next_file:
+		if (outfd > 0) {
+			close(outfd);
+			outfd = -1;
+		}
 		free(temp);
 		free(imagefilename);
 		return IDBLEX_CONTINUE;
