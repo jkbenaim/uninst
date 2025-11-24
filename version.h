@@ -1,6 +1,6 @@
 #pragma once
-#define PROG_NAME "skel"
-#define PROG_URL "https://jrra.zone/skel"
+#define PROG_NAME "uninst"
+#define PROG_URL "https://jrra.zone/uninst"
 #define PROG_EMAIL "jkbenaim@gmail.com"
 #define PROG_VERSION_STRING "0.1"
 #define PROG_VERSION_MAJOR (0)

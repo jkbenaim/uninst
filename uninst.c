@@ -25,6 +25,9 @@
 
 noreturn static void usage(void);
 
+int Lflag = 0;
+int Vflag = 0;
+
 static char *openfilename = NULL;
 static int fd = -1;
 
@@ -64,25 +67,28 @@ int main(int argc, char *argv[])
 	char *filename = NULL;
 	int rc;
 	size_t sz;
-	enum mode_e {
-		MODE_NONE,
-		MODE_LIST = 'l',
-		MODE_EXTRACT = 'x'
-	} mode = MODE_NONE;
 
 	progname_init(argc, argv);
 	
 	opterr = 0;
-	while ((rc = getopt(argc, argv, ":hlx")) != -1)
+	while ((rc = getopt(argc, argv, ":hlvV")) != -1)
 		switch (rc) {
 		case 'h':
 			usage();
 			break;
 		case 'l':
-		case 'x':
-			if (mode != MODE_NONE)
-				tryhelp("conflicting mode flags");
-			mode = rc;
+			if (Lflag)
+				tryhelp("option '-%c' can only be used once", rc);
+			Lflag = 1;
+			break;
+		case 'v':
+			if (Vflag)
+				tryhelp("option '-%c' can only be used once", rc);
+			Vflag = 1;
+			break;
+		case 'V':
+			fprintf(stderr, "%s\n", PROG_EMBLEM);
+			exit(EXIT_SUCCESS);
 			break;
 		case '?':
 			tryhelp("unrecognized option '-%c'", optopt);
@@ -92,6 +98,9 @@ int main(int argc, char *argv[])
 		}
 	argc -= optind;
 	argv += optind;
+
+	if (Lflag && Vflag)
+		tryhelp("cannot use -l and -v together");
 
 	if (*argv != NULL) {
 		filename = *argv;
@@ -170,7 +179,9 @@ int main(int argc, char *argv[])
 		struct stat sb;
 		char *imagename = NULL;
 		char *pdfilename = (char *)data;
-		printf("%5u  %5u  %s\n", line->sum, (line->size + 1023) / 1024, line->installPath);
+		if (Lflag || Vflag)
+			printf("%s\n", line->installPath);
+		if (Lflag) return 0;
 		
 		/* Find the image filename, using the subsystem name as a base.
 		 * Subsystem names are listed in the file as:
@@ -271,11 +282,13 @@ int main(int argc, char *argv[])
 noreturn static void usage(void)
 {
 	(void)fprintf(stderr,
-"Usage: %s [OPTION] [FILE]\n"
-"Perform some action on FILE.\n"
+"Usage: %s [OPTION] <FILE>\n"
+"Extract files from the IRIX 'inst' package in FILE.\n"
 "\n"
-"  -f FILE  use this file\n"
 "  -h       print this help text\n"
+"  -l       list files instead of extracting\n"
+"  -v       list files while extracting\n"
+"  -V       print program version\n"
 "\n"
 "Please report any bugs to <%s>.\n"
 ,		__progname,

@@ -1,56 +1,34 @@
 '\" -*- coding: UTF-8 -*-
-.TH skel 1
+.TH uninst 1
 .SH NAME
-skel \- perform some action
+uninst \- extract files from IRIX's inst packages
 .SH SYNOPSIS
 .nf
-\fBefsextract\fR [\fIOPTION\fR] [\fIFILE\fR]
-\fBefsextract\fR [\fI-h\fR|\fI-V\fR]
+\fBuninst\fR [\fIOPTION\fR] \fIFILE\fR
 .SH DESCRIPTION
-.I efsextract
-extracts files from an SGI CD image, or an EFS file system.
+.I uninst
+extracts files from an IRIX 'inst'-style package.
 .P
-Silicon Graphics (SGI) was a computer company that existed from 1981 to
-2009. During this period, they shipped software for their computers,
-sometimes on CD, and often not using the standard ISO9660 file system.
-These discs are instead simply hard disc images pressed to CD. Thus,
-they have an SGI disk label and an EFS partition.
-.P
-Most systems cannot understand this sort of disc format. This tool was
-developed to allow non-SGI systems to at least be able to extract files
-from such discs.
+inst packages consist of a number of files: the \fIproduct description file\fR with no extension, the \fIidb file\fR with the .idb extension, and at least one \fIimage file\fR with various extensions. Any of these may be given to \fBuninst\fR, as long as all of them are present and named correctly.
 .SH OPTIONS
 .TP
 .B \-h
-Print a usage message on standard output and exit successfully.
+Print a usage message on standard output and exit.
 .TP
 .B \-l
 List files without extracting.
 .TP
-.B \-L
-List partitions and bootfiles from the volume header.
-.TP
-.B \-o \fIARCHIVE\fR
-Instead of extracting, create a tar archive \fIARCHIVE\fR containing
-all files from the image.
-.TP
-.B \-p \fINUM\fR
-Use partition number \fINUM\fR (default: 7).
-.TP
-.B \-q
-Do not show file listing while extracting.
-.TP
-.B \-W
-Instead of extracting, scan the image for `inst' packages and list them.
+.B \-v
+List files while extracting.
 .TP
 .B \-V
 Print version information on standard output and exit successfully.
 .SH AUTHOR
 Jason Benaim <jrra@jrra.zone>
 .SH COPYRIGHT
-Copyright \(co 2025 Jason Benaim.
+Copyright \(co 2025 Jason Benaim, except for gun.c which is copyright \(co 2003, 2005, 2008, 2010, 2012 Mark Adler.
 .br
-Licensed under the GNU GPL version 3 or later.
+Licensed under the GNU GPL version 2 or later, except for gun.c which is under the zlib license.
 .br
 This is free software; you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
