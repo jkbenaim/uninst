@@ -64,14 +64,16 @@
  */
 
 /* external functions and related types and constants */
+#include <errno.h>          /* errno */
+#include <fcntl.h>          /* open() */
+#include <inttypes.h>
 #include <stdio.h>          /* fprintf() */
 #include <stdlib.h>         /* malloc(), free() */
 #include <string.h>         /* strerror(), strcmp(), strlen(), memcpy() */
-#include <errno.h>          /* errno */
-#include <fcntl.h>          /* open() */
 #include <unistd.h>         /* read(), write(), close(), chown(), unlink() */
+#include "cksum.h"
 #include "err.h"
-#include "gun.h"
+#include "unlzw.h"
 
 /* buffer constants */
 #define SIZE 32768U         /* input and output buffer sizes */
@@ -123,12 +125,11 @@ static unsigned in(void *in_desc, unsigned char **buf)
    the output is greater than 4 GB.) */
 struct outd {
     int outfile;
-    int check;                  /* true if checking crc and total */
-    unsigned long crc;
+    uint16_t sum;
     unsigned long total;
 };
 
-/* Write output buffer and update the CRC-32 and total bytes written.  write()
+/* Write output buffer and update the checksum and total bytes written.  write()
    is called until all of the output is written or an error is encountered.
    On success out() returns 0.  For a write failure, out() returns 1.  If the
    output file descriptor is -1, then nothing is written.
@@ -138,9 +139,8 @@ int out(void *out_desc, unsigned char *buf, unsigned len)
     int ret;
     struct outd *me = (struct outd *)out_desc;
 
-    if (me->check) {
-        me->total += len;
-    }
+    me->sum = cksum_update(buf, len, me->sum);
+
     if (me->outfile != -1)
         do {
             ret = PIECE;
@@ -155,11 +155,11 @@ int out(void *out_desc, unsigned char *buf, unsigned len)
     return 0;
 }
 
-/* next input byte macro for use inside lunpipe() and gunpipe() */
+/* next input byte macro for use inside lunpipe() and unlzwpipe() */
 #define NEXT() (have ? 0 : (have = in(indp, &next)), \
                 last = have ? (have--, (int)(*next++)) : -1)
 
-/* memory for gunpipe() and lunpipe() --
+/* memory for unlzwpipe() and lunpipe() --
    the first 256 entries of prefix[] and suffix[] are never used, could
    have offset the index, but it's faster to waste the memory */
 unsigned char inbuf[SIZE];              /* input buffer */
@@ -192,15 +192,16 @@ unsigned char match[65280 + 2];         /* buffer for reversed match or gzip
         chunk = 0; \
     } while (0)
 
-/* Decompress a compress (LZW) file from indp to outfile.  The compress magic
-   header (two bytes) has already been read and verified.  There are have bytes
+/* Decompress a compress (LZW) file from indp to outfile. The compress magic
+   header (two bytes) has already been read and verified. There are have bytes
    of buffered input at next.
 
-   lunpipe() will return Z_OK on success, Z_BUF_ERROR for an unexpected end of
-   file, read error, or write error (a write error indicated by strm->next_in
-   not equal to Z_NULL), or Z_DATA_ERROR for invalid input.
+   lunpipe() will return the 16-bit checksum of the decompressed data on
+   success, or a negative numeber on error: Z_BUF_ERROR for an unexpected end
+   of file, read error, or write error (a write error indicated by
+   strm->next_in not equal to Z_NULL), or Z_DATA_ERROR for invalid input.
  */
-enum zrc_e lunpipe(unsigned have, unsigned char *next, struct ind *indp,
+int lunpipe(unsigned have, unsigned char *next, struct ind *indp,
                   int outfile)
 {
     int last;                   /* last byte read by NEXT(), or -1 if EOF */
@@ -223,7 +224,7 @@ enum zrc_e lunpipe(unsigned have, unsigned char *next, struct ind *indp,
 
     /* set up output */
     outd.outfile = outfile;
-    outd.check = 0;
+    outd.sum = 0;
 
     /* process remainder of compress header -- a flags byte */
     flags = NEXT();
@@ -250,7 +251,7 @@ enum zrc_e lunpipe(unsigned have, unsigned char *next, struct ind *indp,
     /* set up: get first 9-bit code, which is the first decompressed byte, but
        don't create a table entry until the next code */
     if (NEXT() == -1)                       /* no compressed data is ok */
-        return Z_OK;
+        return outd.sum;
     final = prev = (unsigned)last;          /* low 8 bits of code */
     if (NEXT() == -1)                       /* missing a bit */
         return Z_BUF_ERROR;
@@ -285,7 +286,7 @@ enum zrc_e lunpipe(unsigned have, unsigned char *next, struct ind *indp,
 		warnx("write error");
                 return Z_BUF_ERROR;
             }
-            return Z_OK;
+            return outd.sum;
         }
         code += (unsigned)last << left;     /* middle (or high) bits of code */
         left += 8;
@@ -371,7 +372,7 @@ enum zrc_e lunpipe(unsigned have, unsigned char *next, struct ind *indp,
     }
 }
 
-enum zrc_e gunpipe(int infile, int outfile, ssize_t bytes_left)
+int unlzwpipe(int infile, int outfile, ssize_t bytes_left)
 {
 	struct ind ind, *indp;
 	unsigned have, last;

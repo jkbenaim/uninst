@@ -20,6 +20,8 @@ OPTIONS
 
        -l     List files without extracting.
 
+       -t     Test checksum of files in package.
+
        -v     List files while extracting.
 
        -V     Print version information on standard output and exit

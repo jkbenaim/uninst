@@ -12,20 +12,22 @@
 #include <unistd.h>
 
 #include "cksum.h"
-#include "copy.h"
+#include "copypipe.h"
 #include "endian.h"
 #include "err.h"
-#include "gun.h"
 #include "idblex.h"
 #include "progname.h"
 #include "stdnoreturn.h"
 #include "tryhelp.h"
+#include "unlzw.h"
 #include "version.h"
 
 noreturn static void usage(void);
 
+int exit_val = EXIT_SUCCESS;
 int Lflag = 0;
 int Vflag = 0;
+int Tflag = 0;
 
 static char *openfilename = NULL;
 static int fd = -1;
@@ -75,6 +77,134 @@ int open_mkdir(const char *file, int flags, int mode)
 	return open(file, flags, mode);
 }
 
+int callback(struct idbline_s *line, void *data)
+{
+	__label__ next_file;
+	int rc;
+	int outfd = -1;
+	struct stat sb;
+	char *imagename = NULL;
+	char *pdfilename = (char *)data;
+	if ((Lflag || Vflag) && !Tflag)
+		printf("%s\n", line->installPath);
+	if (Lflag) return 0;
+	
+	/* Find the image filename, using the subsystem name as a base.
+	 * Subsystem names are listed in the file as:
+	 * 	x.y.z
+	 * where 'z' is just the plain subsystem name,
+	 * 'y' is the image name,
+	 * and 'x' is the product name.
+	 * What we want is just 'y'.
+	 */
+
+	char *temp;
+	temp = imagename = strdup(line->subsystem);
+	if (!imagename) err(1, "in strdup");
+
+	char *dot = strrchr(imagename, '.');
+	if (!dot) errx(1, "no last dot in subsystem name '%s'", imagename);
+	*dot = '\0';
+	
+	dot = strchr(imagename, '.');
+	if (!dot) errx(1, "no first dot in image name '%s'", imagename);
+	*dot = '\0';
+	imagename = &dot[1];
+
+	/* Assert that imagename has no dots in it. */
+	if (strchr(imagename, '.')) errx(1, "image name has dots");
+
+	char *imagefilename = NULL;
+	rc = asprintf(&imagefilename, "%s.%s", pdfilename, imagename);
+	if (rc == -1) err(1, "in asprintf");
+
+	/* If an image file is already open, and it's not the one we
+	 * want, then close that image file.
+	 */
+	if (openfilename && (0 != strcmp(openfilename, imagefilename))) {
+		if (fd > 0) rc = close(fd);
+		free(openfilename);
+		openfilename = NULL;
+		fd = -1;
+	}
+	
+	/* If an image file is open, then it's definitely the one want.
+	 * If there is no open image file, then we open the one we want.
+	 */
+	if (!openfilename) {
+		int flags = O_RDONLY;
+#ifdef __MINGW32__
+		flags |= O_BINARY;
+#endif
+		openfilename = strdup(imagefilename);
+		rc = stat(openfilename, &sb);
+		if (rc) err(1, "couldn't stat image file '%s'", openfilename);
+
+		fd = open(openfilename, flags);
+		if (fd == -1) err(1, "while opening image file '%s'", openfilename);
+	}
+
+	assert(openfilename != NULL);
+	assert(fd != -1);
+
+	if (!line->off_present || !line->size_present)
+		goto next_file;
+
+	int flags = O_WRONLY | O_CREAT;
+#ifdef __MINGW32__
+	flags |= O_BINARY;
+#endif
+	if (Tflag) {
+		/* For test mode, don't open any output files.
+		 * Both copypipe and unlzwpipe understand that an outfd
+		 * of -1 means to simply compute the checksum and return.
+		 */
+		outfd = -1;
+	} else {
+		outfd = open_mkdir(line->installPath, flags, 0644);
+		if (outfd == -1)
+			err(1, "couldn't open outfile '%s'", line->installPath);
+	}
+
+	off_t pos;
+	pos = lseek(fd, line->off, SEEK_SET);
+	if (pos == (off_t)(-1))
+		err(1, "while seeking image");
+	seek_past_name(fd);
+	if (line->cmpsize_present && (line->cmpsize > 0)) {
+		/* Data is compressed. */
+		rc = unlzwpipe(fd, outfd, line->cmpsize);
+	} else {
+		/* Data is not compressed. */
+		rc = copypipe(fd, outfd, line->size);
+	}
+	if (rc < 0) {
+		/* An error occurred. */
+		errx(1, "while extracting: %d\n", rc);
+	}
+
+	if (line->sum_present) {
+		/* Verify checksum. */
+		if (line->sum == rc) {
+			if (Vflag) {
+				fprintf(stderr, "%s:  OK\n", line->installPath);
+			}
+		} else {
+			fprintf(stderr, "%s:  checksum failed\n", line->installPath);
+			exit_val = EXIT_FAILURE;
+		}
+	}
+
+next_file:
+	if (outfd > 0) {
+		close(outfd);
+		outfd = -1;
+	}
+	free(temp);
+	free(imagefilename);
+	return IDBLEX_CONTINUE;
+}
+
 int main(int argc, char *argv[])
 {
 	char *filename = NULL;
@@ -84,7 +214,7 @@ int main(int argc, char *argv[])
 	progname_init(argc, argv);
 	
 	opterr = 0;
-	while ((rc = getopt(argc, argv, ":hlvV")) != -1)
+	while ((rc = getopt(argc, argv, ":hltvV")) != -1)
 		switch (rc) {
 		case 'h':
 			usage();
@@ -93,6 +223,11 @@ int main(int argc, char *argv[])
 			if (Lflag)
 				tryhelp("option '-%c' can only be used once", rc);
 			Lflag = 1;
+			break;
+		case 't':
+			if (Tflag)
+				tryhelp("option '-%c' can only be used once", rc);
+			Tflag = 1;
 			break;
 		case 'v':
 			if (Vflag)
@@ -112,6 +247,8 @@ int main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
+	if (Lflag && Tflag)
+		tryhelp("cannot use -l and -t together");
 	if (Lflag && Vflag)
 		tryhelp("cannot use -l and -v together");
 
@@ -164,8 +301,10 @@ int main(int argc, char *argv[])
 	dot = strrchr(temp, '.');
 	if (dot) {
 		dot = '\0';
-		if (NULL != strchr(temp, '.'))
-			errx(1, "given file has too many dots in its name");
+		if (NULL != strchr(temp, '.')) {
+			warnx("given file has too many dots in its name.");
+			errx(1, "are you sure this is the product description file?");
+		}
 	}
 	pdfilename = temp;
 
@@ -186,107 +325,6 @@ int main(int argc, char *argv[])
 	idbfilename = NULL;
 	idbf = NULL;
 
-	int callback(struct idbline_s *line, void *data)
-	{
-		__label__ next_file;
-		int rc;
-		int outfd = -1;
-		struct stat sb;
-		char *imagename = NULL;
-		char *pdfilename = (char *)data;
-		if (Lflag || Vflag)
-			printf("%s\n", line->installPath);
-		if (Lflag) return 0;
-		
-		/* Find the image filename, using the subsystem name as a base.
-		 * Subsystem names are listed in the file as:
-		 * 	x.y.z
-		 * where 'z' is just the plain subsystem name,
-		 * 'y' is the image name,
-		 * and 'x' is the product name.
-		 * What we want is just 'y'.
-		 */
-
-		char *temp;
-		temp = imagename = strdup(line->subsystem);
-		if (!imagename) err(1, "in strdup");
-
-		char *dot = strrchr(imagename, '.');
-		if (!dot) errx(1, "no last dot in subsystem name '%s'", imagename);
-		*dot = '\0';
-		
-		dot = strchr(imagename, '.');
-		if (!dot) errx(1, "no first dot in image name '%s'", imagename);
-		*dot = '\0';
-		imagename = &dot[1];
-
-		/* Assert that imagename has no dots in it. */
-		if (strchr(imagename, '.')) errx(1, "image name has dots");
-
-		char *imagefilename = NULL;
-		rc = asprintf(&imagefilename, "%s.%s", pdfilename, imagename);
-		if (rc == -1) err(1, "in asprintf");
-
-		/* If an image file is already open, and it's not the one we
-		 * want, then close that image file.
-		 */
-		if (openfilename && (0 != strcmp(openfilename, imagefilename))) {
-			if (fd > 0) rc = close(fd);
-			free(openfilename);
-			openfilename = NULL;
-			fd = -1;
-		}
-		
-		/* If an image file is open, then it's definitely the one want.
-		 * If there is no open image file, then we open the one we want.
-		 */
-		if (!openfilename) {
-			int flags = O_RDONLY;
-#ifdef __MINGW32__
-			flags |= O_BINARY;
-#endif
-			openfilename = strdup(imagefilename);
-			rc = stat(openfilename, &sb);
-			if (rc) err(1, "couldn't stat image file '%s'", openfilename);
-
-			fd = open(openfilename, flags);
-			if (fd == -1) err(1, "while opening image file '%s'", openfilename);
-		}
-
-		assert(openfilename != NULL);
-		assert(fd != -1);
-
-		if (!line->off_present || !line->size_present)
-			goto next_file;
-
-		int flags = O_WRONLY | O_CREAT;
-#ifdef __MINGW32__
-		flags |= O_BINARY;
-#endif
-		outfd = open_mkdir(line->installPath, flags, 0644);
-		if (outfd == -1) err(1, "couldn't open outfile '%s'", line->installPath);
-
-		off_t pos;
-		pos = lseek(fd, line->off, SEEK_SET);
-		if (pos == (off_t)(-1))
-			err(1, "while seeking image");
-		seek_past_name(fd);
-		if (line->cmpsize_present && (line->cmpsize > 0)) {
-			/* Data is compressed. */
-			rc = gunpipe(fd, outfd, line->cmpsize);
-		} else {
-			/* Data is raw. */
-			copy(fd, outfd, line->size);
-		}
-next_file:
-		if (outfd > 0) {
-			close(outfd);
-			outfd = -1;
-		}
-		free(temp);
-		free(imagefilename);
-		return IDBLEX_CONTINUE;
-	}
 	idblex(idbdata, sb.st_size + 2, callback, (void *)pdfilename);
 
 	free(pdfilename);
@@ -296,7 +334,10 @@ next_file:
 	free(openfilename);
 	close(fd);
 
-	return EXIT_SUCCESS;
+	if (exit_val != EXIT_SUCCESS)
+		warnx("errors occurred");
+
+	return exit_val;
 }
 
 noreturn static void usage(void)
@@ -307,6 +348,7 @@ noreturn static void usage(void)
 "\n"
 "  -h       print this help text\n"
 "  -l       list files instead of extracting\n"
+"  -t       test checksum of files in package\n"
 "  -v       list files while extracting\n"
 "  -V       print program version\n"
 "\n"

@@ -2,7 +2,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
-#include "copy.h"
+#include "cksum.h"
+#include "copypipe.h"
 #include "endian.h"
 #include "err.h"
 
@@ -29,10 +30,11 @@ void seek_past_name(int infd)
 	 */
 }
 
-void copy(int infd, int outfd, unsigned inlen)
+int copypipe(int infd, int outfd, unsigned inlen)
 {
 	ssize_t sRc;
 	unsigned char buf[BUFSIZ];
+	uint16_t sum = 0;
 
 	while (inlen > 0) {
 		ssize_t step;
@@ -42,9 +44,14 @@ void copy(int infd, int outfd, unsigned inlen)
 		if (sRc < 0) err(1, "couldn't read from image");
 
 		if (sRc == 0) continue;
+		sum = cksum_update(buf, step, sum);
 		step = sRc;
-		sRc = write(outfd, buf, sRc);
-		if (sRc == -1) err(1, "couldn't write to outfile");
+		if (outfd != -1) {
+			sRc = write(outfd, buf, sRc);
+			if (sRc == -1) err(1, "couldn't write to outfile");
+		}
 		inlen -= step;
 	}
+
+	return sum;
 }
