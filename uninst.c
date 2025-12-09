@@ -34,12 +34,12 @@ static int fd = -1;
 
 /* Drop-in for open() that also creates directories along the way.
  * 
- * NOTE: open is defined as:
+ * NOTE: open is defined as...
  * 	int open(const char *file, int flag, ...);
- * with an optional 3rd argument, specifying the file mode
- * if O_CREAT or O_TMPFILE is set in flags.
- * In our open_mkdir, we assert that O_CREAT was passed
- * in flags, and so the mode paramater is mandatory too.
+ * ... with an optional 3rd argument, specifying the file mode if
+ * either O_CREAT or O_TMPFILE is set in flags.
+ * In our open_mkdir, we assert that O_CREAT was passed in flags,
+ * and so the mode paramater is mandatory too.
  */
 int open_mkdir(const char *file, int flags, int mode)
 {
