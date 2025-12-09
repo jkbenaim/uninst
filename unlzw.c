@@ -1,6 +1,6 @@
-/* gun.c is from the zlib distribution. It was originally an example showing
- * how to make a gzip-like program using zlib as a base. Here, it has been
- * butchered to only provide LZW decompression.
+/* This file is adapted from gun.c in the zlib distribution. It was originally
+ * an example showing how to make a gzip-like program using zlib as a base.
+ * Here, it has been butchered to only provide LZW decompression.
  *
  * Original notice follows.
  */
