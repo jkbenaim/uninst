@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include "cksum.h"
@@ -7,12 +8,13 @@
 #include "endian.h"
 #include "err.h"
 
-void seek_past_name(int infd)
+char *read_string_from_image(int infd)
 {
 	ssize_t sRc;
 	uint16_t len;
-	unsigned char buf[BUFSIZ];
-	
+	char buf[2];
+	char *name = NULL;
+
 	/* The first two bytes are a length, followed by a string
 	 * of that length indicating the install path. The
 	 * string is not null-terminated. We don't do anything
@@ -22,12 +24,18 @@ void seek_past_name(int infd)
 	if (sRc != 2) err(1, "couldn't read from image");
 	memcpy(&len, buf, 2);
 	len = be16toh(len);
-	assert(len <= BUFSIZ);
-	sRc = read(infd, buf, len);
+
+	name = malloc(len + 1);
+	if (!name) err(1, "in malloc");
+	sRc = read(infd, name, len);
 	if (sRc != len) err(1, "couldn't read from image 2");
+	name[len] = '\0';
+
 	/* At this point, the infile is positioned right at
 	 * the beginning of the file data.
 	 */
+
+	return name;
 }
 
 int copypipe(int infd, int outfd, unsigned inlen)

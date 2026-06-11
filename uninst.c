@@ -35,7 +35,7 @@ static int fd = -1;
 
 int callback(struct idbline_s *line, void *data)
 {
-	__label__ next_file;
+	__label__ next_file, out_error;
 	int rc;
 	int outfd = -1;
 	struct stat sb;
@@ -98,13 +98,22 @@ int callback(struct idbline_s *line, void *data)
 
 		fd = open(openfilename, flags);
 		if (fd == -1) err(1, "while opening image file '%s'", openfilename);
+
+		/* Seek past the image magic. */
+		off_t pos;
+		pos = lseek(fd, 13, SEEK_SET);
+		if (pos == (off_t)(-1))
+			err(1, "while seeking past image magic");
 	}
 
 	assert(openfilename != NULL);
 	assert(fd != -1);
 
-	if (!line->off_present || !line->size_present)
+	if (!line->size_present) {
+		if (line->type == 'f')
+			warnx("skipping file '%s' as no size present", line->installPath);
 		goto next_file;
+	}
 
 	int flags = O_WRONLY | O_CREAT;
 #ifdef __MINGW32__
@@ -122,11 +131,28 @@ int callback(struct idbline_s *line, void *data)
 			err(1, "couldn't open outfile '%s'", line->installPath);
 	}
 
-	off_t pos;
-	pos = lseek(fd, line->off, SEEK_SET);
-	if (pos == (off_t)(-1))
-		err(1, "while seeking image");
-	seek_past_name(fd);
+	if (line->off_present) {
+		off_t pos;
+		pos = lseek(fd, line->off, SEEK_SET);
+		if (pos == (off_t)(-1))
+			err(1, "while seeking image");
+	}
+	
+	/* Check that the install path in the .idb line matches the
+	 * install path in the image file.
+	 */
+	char *checkname;
+	checkname = read_string_from_image(fd);
+	if (!checkname) errx(1, "couldn't read install path from image file");
+	if (0 != strcmp(checkname, line->installPath)) {
+		errx(1, "idb install path '%s' doesn't match image install path '%s'",
+			line->installPath, checkname);
+		free(checkname);
+		goto out_error;
+	}
+	free(checkname);
+	checkname = NULL;
+
 	if (line->cmpsize_present && (line->cmpsize > 0)) {
 		/* Data is compressed. */
 		rc = unlzwpipe(fd, outfd, line->cmpsize);
@@ -148,6 +174,7 @@ int callback(struct idbline_s *line, void *data)
 		} else {
 			fprintf(stderr, "%s:  checksum failed\n", line->installPath);
 			exit_val = EXIT_FAILURE;
+			goto out_error;
 		}
 	}
 
@@ -159,6 +186,15 @@ next_file:
 	free(temp);
 	free(imagefilename);
 	return IDBLEX_CONTINUE;
+out_error:
+	if (outfd > 0) {
+		close(outfd);
+		outfd = -1;
+	}
+	free(temp);
+	free(imagefilename);
+	warnx("terminating early");
+	return IDBLEX_STOP;
 }
 
 int main(int argc, char *argv[])
