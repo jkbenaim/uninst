@@ -31,8 +31,8 @@ AUTHOR
        Jason Benaim <jrra@jrra.zone>
 
 COPYRIGHT
-       Copyright © 2025 Jason Benaim, except for unlzw.c which is copyright
-       © 2003, 2005, 2008, 2010, 2012 Mark Adler.
+       Copyright © 2025-2026 Jason Benaim, except for unlzw.c which is
+       copyright © 2003, 2005, 2008, 2010, 2012 Mark Adler.
        Licensed under the GNU GPL version 2 or later, except for unlzw.c
        which is under the zlib license.
        This is free software; you are free to change and redistribute it.
