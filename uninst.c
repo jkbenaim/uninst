@@ -84,7 +84,7 @@ int callback(struct idbline_s *line, void *data)
 		fd = -1;
 	}
 	
-	/* If an image file is open, then it's definitely the one want.
+	/* If an image file is open, then it's definitely the one we want.
 	 * If there is no open image file, then we open the one we want.
 	 */
 	if (!openfilename) {
