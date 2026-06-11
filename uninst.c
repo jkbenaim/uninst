@@ -20,6 +20,7 @@
 #include "stdnoreturn.h"
 #include "tryhelp.h"
 #include "unlzw.h"
+#include "util.h"
 #include "version.h"
 
 noreturn static void usage(void);
@@ -31,51 +32,6 @@ int Tflag = 0;
 
 static char *openfilename = NULL;
 static int fd = -1;
-
-/* Drop-in for open() that also creates directories along the way.
- * 
- * NOTE: open is defined as...
- * 	int open(const char *file, int flag, ...);
- * ... with an optional 3rd argument, specifying the file mode if
- * either O_CREAT or O_TMPFILE is set in flags.
- * In our open_mkdir, we assert that O_CREAT was passed in flags,
- * and so the mode paramater is mandatory too.
- */
-int open_mkdir(const char *file, int flags, int mode)
-{
-	int rc;
-	char *myclone, *tmp;
-	assert(flags & O_CREAT);
-	myclone = strdup(file);
-	if (!myclone) err(1, "in strdupa");
-
-	/* Walk the path, creating directories as we go. */
-	for (tmp = myclone; *tmp; tmp++) {
-		if (*tmp == '/') {
-			*tmp = '\0';
-			/* WEIRD API ALERT:
-			 * POSIX and Win32 have different definitions of mkdir().
-			 * Fortunately, the only real difference is in whether they
-			 * take a second argument. Windows doesn't, but POSIX takes
-			 * an argument specifying the new directory's mode.
-			 * On error, either implementation will return -1
-			 * and set errno appropriately.
-			 */
-#ifdef __MINGW32__
-			rc = mkdir(myclone);
-#else
-			rc = mkdir(myclone, 0755);
-#endif
-			if ((rc == -1) && (errno != EEXIST)) {
-				free(myclone);
-				return rc;
-			}
-			*tmp = '/';
-		}
-	}
-	free(myclone);
-	return open(file, flags, mode);
-}
 
 int callback(struct idbline_s *line, void *data)
 {
@@ -292,11 +248,19 @@ int main(int argc, char *argv[])
 	 * to find out.
 	 */
 
+	/* Do the equivalent of basename(3) but without calling basename(3).
+	 * Unfortunately, POSIX's definition of basename(3) is allowed to
+	 * modify its argument for some reason. What a happy surprise. */
+	char *slash, *temp;
+	slash = strrchr(filename, '/');
+	if (slash) {
+		temp = strdup(&slash[1]);
+	} else {
+		temp = strdup(filename);
+	}
+
 	char *pdfilename;
-	/* Before we go searching, let's see what kind of file the user
-	 * specified. */
 	char *dot;
-	char *temp = strdup(filename);
 	if (!temp) err(1, "in strdup");
 	dot = strrchr(temp, '.');
 	if (dot) {
