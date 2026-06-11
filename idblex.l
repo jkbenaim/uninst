@@ -58,7 +58,7 @@ static unsigned long getNum(const char *s);
 	colNum++;
 }
 
-<various>cmpsize\(.*\) {
+<various>cmpsize\([0-9]+\) {
 	line.cmpsize_present = true;
 	line.cmpsize = getNum(yytext);
 }
@@ -87,7 +87,7 @@ static unsigned long getNum(const char *s);
 	line.exitop = getBody(yytext);
 }
 
-<various>f\(.*\) {
+<various>f\([0-9]+\) {
 	line.f_present = true;
 	line.f = getNum(yytext);
 }
